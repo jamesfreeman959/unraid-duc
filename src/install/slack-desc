@@ -1,0 +1,12 @@
+   |-----handy-ruler------------------------------------------------------|
+unraid-duc: unraid-duc (Disk usage analyzer for Unraid)
+unraid-duc:
+unraid-duc: Indexes disk usage on a schedule with duc and lets you browse
+unraid-duc: the results instantly from the Unraid webGUI or the console
+unraid-duc: (duc ui), without rescanning the disks every time.
+unraid-duc:
+unraid-duc: Built from https://duc.zevv.nl
+unraid-duc:
+unraid-duc: https://github.com/jamesfreeman959/unraid-duc
+unraid-duc:
+unraid-duc:

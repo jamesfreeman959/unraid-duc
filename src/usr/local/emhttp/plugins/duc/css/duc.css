@@ -1,0 +1,52 @@
+#duc-app { margin-top: 8px; }
+
+.duc-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 8px; }
+.duc-toolbar label { display: inline-flex; align-items: center; gap: 6px; margin: 0; }
+.duc-toolbar select { min-width: 0; margin: 0; }
+.duc-toolbar input[type=button] { margin: 0; }
+.duc-spacer { flex: 1; }
+#duc-state { opacity: .8; font-size: .95em; }
+#duc-state.error, .duc-message.error { color: #e22828; }
+
+.duc-message { padding: 10px 12px; margin: 8px 0; border-radius: 4px; background: rgba(128,128,128,.12); }
+
+.duc-crumbs { margin: 8px 0 12px; font-size: 1.1em; word-break: break-all; }
+.duc-crumbs a { cursor: pointer; }
+
+.duc-body { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
+.duc-chart-wrap { position: relative; flex: 0 1 560px; min-width: 280px; }
+#duc-chart { width: 100%; height: auto; display: block; transition: opacity .15s; }
+#duc-chart.loading { opacity: .4; }
+#duc-chart path { stroke: rgba(0,0,0,.25); stroke-width: .6; }
+#duc-chart path.dir { cursor: pointer; }
+#duc-chart path:hover { filter: brightness(1.15); }
+#duc-chart circle.centre { fill: rgba(128,128,128,.12); }
+#duc-chart circle.centre.up { cursor: pointer; }
+#duc-chart circle.centre.up:hover { fill: rgba(128,128,128,.25); }
+#duc-chart text { fill: currentColor; pointer-events: none; }
+#duc-chart .label-name { font-size: 15px; font-weight: bold; }
+#duc-chart .label-size { font-size: 14px; }
+
+.duc-tip { display: none; position: absolute; z-index: 10; pointer-events: none; padding: 6px 9px;
+           border-radius: 4px; background: rgba(20,20,20,.92); color: #f2f2f2; font-size: 12px;
+           max-width: 320px; word-break: break-all; box-shadow: 0 2px 6px rgba(0,0,0,.3); }
+
+.duc-list-wrap { flex: 1 1 420px; min-width: 0; }
+table.duc-list { width: 100%; border-collapse: collapse; table-layout: fixed; }
+table.duc-list th, table.duc-list td { padding: 4px 8px; text-align: left; white-space: nowrap; }
+table.duc-list thead th { border-bottom: 1px solid rgba(128,128,128,.4); }
+table.duc-list tbody tr:hover { background: rgba(128,128,128,.12); }
+table.duc-list .name { overflow: hidden; text-overflow: ellipsis; }
+table.duc-list .name i { width: 18px; opacity: .7; }
+table.duc-list .size, table.duc-list .files { text-align: right; width: 90px; }
+table.duc-list .pct { width: 150px; }
+table.duc-list .bar { display: inline-block; width: 90px; height: 8px; margin-right: 6px; vertical-align: middle;
+                      background: rgba(128,128,128,.2); border-radius: 4px; overflow: hidden; }
+table.duc-list .bar div { height: 100%; background: #ff8c2f; }
+.duc-more { padding: 8px; opacity: .7; }
+
+@media (max-width: 700px) {
+  table.duc-list .files { display: none; }
+  table.duc-list .pct { width: 110px; }
+  table.duc-list .bar { width: 50px; }
+}

@@ -1,0 +1,75 @@
+<?xml version='1.0' standalone='yes'?>
+<!DOCTYPE PLUGIN [
+<!ENTITY name      "duc">
+<!ENTITY package   "unraid-duc">
+<!ENTITY author    "@AUTHOR@">
+<!ENTITY version   "@VERSION@">
+<!ENTITY repo      "@REPO@">
+<!ENTITY pluginURL "https://raw.githubusercontent.com/&repo;/main/plugin/duc.plg">
+<!ENTITY txz       "&package;-&version;-x86_64-1.txz">
+<!ENTITY plgdir    "/boot/config/plugins/&name;">
+]>
+
+<PLUGIN
+  name="&name;"
+  author="&author;"
+  version="&version;"
+  pluginURL="&pluginURL;"
+  support="https://github.com/&repo;/issues"
+  launch="Settings/DiskUsage"
+  icon="pie-chart"
+  min="6.12.0"
+>
+
+<CHANGES>
+<![CDATA[
+@CHANGES@
+]]>
+</CHANGES>
+
+<FILE Name="&plgdir;/&txz;">
+<URL>https://github.com/&repo;/releases/download/&version;/&txz;</URL>
+<SHA256>@SHA256@</SHA256>
+</FILE>
+
+<!-- install -->
+<FILE Run="/bin/bash">
+<INLINE>
+<![CDATA[
+upgradepkg --install-new /boot/config/plugins/duc/unraid-duc-@VERSION@-x86_64-1.txz
+
+# remove packages from previous versions
+find /boot/config/plugins/duc -maxdepth 1 -name 'unraid-duc-*.txz' ! -name 'unraid-duc-@VERSION@-x86_64-1.txz' -delete
+
+/usr/local/emhttp/plugins/duc/scripts/apply-settings
+
+echo ""
+echo "----------------------------------------------------"
+echo " Disk Usage (duc) @VERSION@ has been installed."
+echo " Open Settings > User Utilities > Disk Usage."
+echo "----------------------------------------------------"
+echo ""
+]]>
+</INLINE>
+</FILE>
+
+<!-- remove -->
+<FILE Run="/bin/bash" Method="remove">
+<INLINE>
+<![CDATA[
+/usr/local/emhttp/plugins/duc/scripts/duc-index --cancel 2>/dev/null
+rm -f /boot/config/plugins/duc/duc.cron
+removepkg unraid-duc
+rm -rf /usr/local/emhttp/plugins/duc /var/run/duc
+rm -rf /boot/config/plugins/duc
+/usr/local/sbin/update_cron
+
+echo ""
+echo "Disk Usage (duc) has been removed."
+echo "The index database (by default /mnt/user/appdata/duc) was left in place; delete it manually if no longer needed."
+echo ""
+]]>
+</INLINE>
+</FILE>
+
+</PLUGIN>

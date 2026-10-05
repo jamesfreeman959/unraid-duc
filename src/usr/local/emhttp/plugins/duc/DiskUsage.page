@@ -1,0 +1,69 @@
+Menu="Utilities"
+Type="xmenu"
+Title="Disk Usage"
+Icon="pie-chart"
+Tag="pie-chart"
+Markdown="false"
+---
+<?php
+/* Disk Usage (duc) - browse the most recent index. */
+?>
+<link type="text/css" rel="stylesheet" href="<?autov('/plugins/duc/css/duc.css')?>">
+
+<div id="duc-app">
+  <div class="duc-toolbar">
+    <label>_(Index)_:
+      <select id="duc-root"></select>
+    </label>
+    <label>_(Show)_:
+      <select id="duc-mode">
+        <option value="actual">_(Size on disk)_</option>
+        <option value="apparent">_(Apparent size)_</option>
+        <option value="count">_(File count)_</option>
+      </select>
+    </label>
+    <span class="duc-spacer"></span>
+    <span id="duc-state"></span>
+    <input type="button" id="duc-run" value="_(Index now)_">
+    <input type="button" id="duc-cancel" value="_(Cancel)_" style="display:none">
+  </div>
+
+  <div id="duc-message" class="duc-message" style="display:none"></div>
+
+  <nav id="duc-crumbs" class="duc-crumbs"></nav>
+
+  <div class="duc-body">
+    <div class="duc-chart-wrap">
+      <svg id="duc-chart" viewBox="-300 -300 600 600" role="img" aria-label="_(Disk usage chart)_"></svg>
+      <div id="duc-tip" class="duc-tip"></div>
+    </div>
+    <div class="duc-list-wrap">
+      <table class="duc-list">
+        <thead><tr><th class="name">_(Name)_</th><th class="size">_(Size)_</th><th class="pct">%</th><th class="files">_(Files)_</th></tr></thead>
+        <tbody id="duc-list"></tbody>
+      </table>
+      <div id="duc-more" class="duc-more"></div>
+    </div>
+  </div>
+</div>
+
+<script src="<?autov('/plugins/duc/js/duc.js')?>"></script>
+<script>
+$(function() {
+  DucBrowser.init({
+    api: '/plugins/duc/include/api.php',
+    csrf: (typeof csrf_token !== 'undefined') ? csrf_token : '',
+    text: {
+      noIndex: "_(No index has been built yet. Click Index now, or set a schedule on the Settings tab.)_",
+      running: "_(Indexing)_",
+      lastRun: "_(Last indexed)_",
+      failed: "_(Last index run failed)_",
+      cancelled: "_(Last index run was cancelled)_",
+      more: "_(more entries not shown)_",
+      files: "_(files)_",
+      up: "_(Up one level)_",
+      empty: "_(This folder is empty)_"
+    }
+  });
+});
+</script>

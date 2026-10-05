@@ -1,0 +1,33 @@
+#!/usr/bin/php -q
+<?php
+/* Regenerate the duc cron schedule from the saved settings. */
+
+require_once '/usr/local/emhttp/plugins/duc/include/common.php';
+
+$cfg = duc_config();
+$cron = '/boot/config/plugins/duc/duc.cron';
+$hour = (int)($cfg['HOUR'] ?? 3);
+if ($hour < 0 || $hour > 23) $hour = 3;
+
+switch ($cfg['SCHEDULE'] ?? 'disabled') {
+    case 'hourly':  $when = '0 * * * *'; break;
+    case 'daily':   $when = "0 $hour * * *"; break;
+    case 'weekly':  $when = "0 $hour * * 0"; break;
+    case 'monthly': $when = "0 $hour 1 * *"; break;
+    case 'custom':  $when = trim($cfg['CUSTOM_CRON'] ?? ''); break;
+    default:        $when = '';
+}
+
+// Accept only the five standard cron fields (digits, *, /, -, ,).
+$valid = preg_match('#^[0-9*/,-]+( [0-9*/,-]+){4}$#', preg_replace('/\s+/', ' ', $when));
+
+@mkdir(dirname($cron), 0755, true);
+if ($when !== '' && $valid) {
+    file_put_contents($cron, "# Generated duc index schedule:\n" .
+        preg_replace('/\s+/', ' ', $when) . ' ' . DUC_DOCROOT . "/scripts/duc-index cron &> /dev/null\n\n");
+} else {
+    if ($when !== '') echo "Invalid cron schedule '$when', scheduled indexing disabled\n";
+    @unlink($cron);
+}
+
+exec('/usr/local/sbin/update_cron');

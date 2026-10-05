@@ -1,0 +1,227 @@
+--- a/src/duc/cmd-json.c
++++ b/src/duc/cmd-json.c
+@@ -9,15 +9,17 @@
+ #include <sys/stat.h>
+ #include <unistd.h>
+ #include <ctype.h>
++#include <stdint.h>
+ 
+ #include "cmd.h"
+ #include "duc.h"
+-	
+ 
++
+ static bool opt_apparent = false;
+ static char *opt_database = NULL;
+ static double opt_min_size = 0;
+ static bool opt_exclude_files = false;
++static int opt_levels = 0;
+ 
+ 
+ static void indent(int n)
+@@ -29,88 +31,85 @@
+ }
+ 
+ 
++/*
++ * Write a string as the body of a JSON string literal, escaping quotes,
++ * backslashes and control characters as required by RFC 8259.
++ */
++
+ static void print_escaped(const char *s)
+ {
+ 	while(*s) {
+-		switch(*s) {
+-			case '"': printf("\""); break;
+-			case '\t': putchar('\t'); break;
+-			case '\n': putchar('\n'); break;
+-			case '\r': putchar('\r'); break;
+-			default: putchar(*s); break;
++		unsigned char c = *s;
++		switch(c) {
++			case '"': printf("\\\""); break;
++			case '\\': printf("\\\\"); break;
++			case '\b': printf("\\b"); break;
++			case '\f': printf("\\f"); break;
++			case '\t': printf("\\t"); break;
++			case '\n': printf("\\n"); break;
++			case '\r': printf("\\r"); break;
++			default:
++				if(c < 0x20) {
++					printf("\\u%04x", c);
++				} else {
++					putchar(c);
++				}
++				break;
+ 		}
+ 		s++;
+ 	}
+ }
+ 
+ 
+-static void dump(duc *duc, duc_dir *dir, int depth, off_t min_size, int ex_files)
++static void dump(duc *duc, duc_dir *dir, int depth, int level, off_t min_size, int ex_files)
+ {
+ 	struct duc_dirent *e;
+ 	bool first = true;
+ 
+ 	duc_size_type st = opt_apparent ? DUC_SIZE_TYPE_APPARENT : DUC_SIZE_TYPE_ACTUAL;
+ 
+-	while( (e = duc_dir_read(dir, DUC_SIZE_TYPE_ACTUAL, DUC_SORT_SIZE)) != NULL) {
++	while( (e = duc_dir_read(dir, st, DUC_SORT_SIZE)) != NULL) {
+ 
+ 		off_t size = duc_get_size(&e->size, st);
+ 
++		if(size < min_size) continue;
++		if(e->type != DUC_FILE_TYPE_DIR && ex_files) continue;
++
+ 		if (!first) printf(",\n");
++		first = false;
+ 
+-		if(e->type == DUC_FILE_TYPE_DIR && size>= min_size) {
++		indent(depth);
++		printf("{\n");
++		indent(depth + 2);
++		printf("\"name\": \"");
++		print_escaped(e->name);
++		printf("\",\n");
++		indent(depth + 2);
++		printf("\"type\": \"%s\",\n", e->type == DUC_FILE_TYPE_DIR ? "dir" : "file");
++		indent(depth + 2);
++		printf("\"count\": %jd,\n", (intmax_t)e->size.count);
++		indent(depth + 2);
++		printf("\"size_apparent\": %jd,\n", (intmax_t)e->size.apparent);
++		indent(depth + 2);
++		printf("\"size_actual\": %jd", (intmax_t)e->size.actual);
++
++		if(e->type == DUC_FILE_TYPE_DIR && (opt_levels == 0 || level < opt_levels)) {
+ 			duc_dir *dir_child = duc_dir_openent(dir, e);
+ 			if(dir_child) {
+-				indent(depth);
+-				printf("{\n");
+-
++				printf(",\n");
+ 				indent(depth + 2);
+-				printf("\"name\": \"");
+-				print_escaped(e->name); 
+-				printf("\",\n");
+-
+-				indent(depth + 2);
+-				printf("\"count\": %jd,\n", e->size.count);
+-
+-				indent(depth + 2);
+-				printf("\"size_apparent\": %jd,\n", e->size.apparent); 
+-
+-				indent(depth + 2);
+-				printf("\"size_actual\": %jd,\n", e->size.actual);
+-				
+-				indent(depth + 2);
+ 				printf("\"children\": [\n");
+-				
+-				dump(duc, dir_child, depth + 4, min_size, ex_files);
+-
++				dump(duc, dir_child, depth + 4, level + 1, min_size, ex_files);
+ 				printf("\n");
+ 				indent(depth + 2);
+-				printf("]\n");
+-				
+-				indent(depth);
+-				printf("}");
++				printf("]");
++				duc_dir_close(dir_child);
+ 			}
+-			duc_dir_close(dir_child);
+-		} else {
+-			if(!ex_files && size >= min_size) {
+-				indent(depth);
+-				printf("{\n");
+-
+-				indent(depth + 2);
+-				printf("\"name\": \"");
+-				print_escaped(e->name); 
+-				printf("\",\n");
+-
+-				indent(depth + 2);
+-				printf("\"size_apparent\": %jd,\n", e->size.apparent); 
+-
+-				indent(depth + 2);
+-				printf("\"size_actual\": %jd\n", e->size.actual);
+-				
+-				indent(depth);
+-				printf("}");
+-			}
+ 		}
+-		first = false;
++
++		printf("\n");
++		indent(depth);
++		printf("}");
+ 	}
+ }
+ 
+@@ -134,32 +133,25 @@
+ 
+ 	struct duc_size size;
+ 	duc_dir_get_size(dir, &size);
+-
+ 	printf("{\n");
+-
+ 	indent(2);
+ 	printf("\"name\": \"");
+-	print_escaped(path); 
++	print_escaped(path);
+ 	printf("\",\n");
+-
+ 	indent(2);
+-	printf("\"count\": %jd,\n", size.count);
+-
++	printf("\"type\": \"dir\",\n");
+ 	indent(2);
+-	printf("\"size_apparent\": %jd,\n", size.apparent); 
+-
++	printf("\"count\": %jd,\n", (intmax_t)size.count);
+ 	indent(2);
+-	printf("\"size_actual\": %jd,\n", size.actual);
+-	
++	printf("\"size_apparent\": %jd,\n", (intmax_t)size.apparent);
+ 	indent(2);
++	printf("\"size_actual\": %jd,\n", (intmax_t)size.actual);
++	indent(2);
+ 	printf("\"children\": [\n");
+-	
+-	dump(duc, dir, 4, (off_t)opt_min_size, opt_exclude_files);
++	dump(duc, dir, 4, 1, (off_t)opt_min_size, opt_exclude_files);
+ 	printf("\n");
+-
+ 	indent(2);
+ 	printf("]\n");
+-
+ 	printf("}\n");
+ 
+ 	duc_dir_close(dir);
+@@ -170,14 +162,14 @@
+ 
+ 
+ static struct ducrc_option options[] = {
+-	{ &opt_apparent,      "apparent",      'a', DUCRC_TYPE_BOOL,   "interpret min_size/-s value as apparent size" },
++	{ &opt_apparent,      "apparent",      'a', DUCRC_TYPE_BOOL,   "use apparent size for sorting and for the min_size/-s value" },
+ 	{ &opt_database,      "database",      'd', DUCRC_TYPE_STRING, "select database file to use [~/.duc.db]" },
+ 	{ &opt_exclude_files, "exclude-files", 'x', DUCRC_TYPE_BOOL,   "exclude file from json output, only include directories" },
++	{ &opt_levels,        "levels",        'l', DUCRC_TYPE_INT,    "traverse up to ARG levels deep [0 = unlimited]" },
+ 	{ &opt_min_size,      "min_size",      's', DUCRC_TYPE_DOUBLE, "specify min size for files or directories" },
+ 	{ NULL }
+ };
+ 
+-
+ struct cmd cmd_json = {
+ 	.name = "json",
+ 	.descr_short = "Dump JSON output",
+@@ -186,7 +178,7 @@
+ 	.options = options,
+ };
+ 
+-
+ /*
+  * End
+  */
++

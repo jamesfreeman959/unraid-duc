@@ -1,0 +1,112 @@
+Menu="DiskUsage:2"
+Title="Settings"
+Tag="gear"
+---
+<?php
+require_once '/usr/local/emhttp/plugins/duc/include/common.php';
+$cfg = duc_config();
+$paths = implode("\n", duc_index_paths($cfg));
+$excludes = implode("\n", duc_exclude_patterns($cfg));
+?>
+<script>
+function ducPrepare(form) {
+  // Settings are stored as single-line ini values; keep one entry per line in the UI.
+  form.INDEX_PATHS.value = form.INDEX_PATHS_UI.value.split(/\n/).map(s => s.trim()).filter(Boolean).join(',');
+  form.EXCLUDE.value = form.EXCLUDE_UI.value.split(/\n/).map(s => s.trim()).filter(Boolean).join(',');
+  form.INDEX_PATHS_UI.disabled = true;
+  form.EXCLUDE_UI.disabled = true;
+}
+function ducSchedule(form) {
+  var s = form.SCHEDULE.value;
+  $('#duc-hour').toggle(s === 'daily' || s === 'weekly' || s === 'monthly');
+  $('#duc-custom').toggle(s === 'custom');
+}
+$(function() { ducSchedule(document.duc_settings); });
+</script>
+
+<form markdown="1" name="duc_settings" method="POST" action="/update.php" target="progressFrame" onsubmit="ducPrepare(this)">
+<input type="hidden" name="#file" value="duc/duc.cfg">
+<input type="hidden" name="#command" value="/plugins/duc/scripts/apply-settings">
+<input type="hidden" name="INDEX_PATHS" value="">
+<input type="hidden" name="EXCLUDE" value="">
+
+_(Paths to index)_:
+: <textarea name="INDEX_PATHS_UI" rows="4" spellcheck="false" style="width:400px"><?=htmlspecialchars($paths)?></textarea>
+
+> One path per line. Indexing `/mnt/user` shows usage by share. Index `/mnt/disk1`, `/mnt/cache` etc. instead
+> (or as well) to see usage per disk or pool; scanning disks directly is faster than going through `/mnt/user`.
+> Indexing reads directory metadata on every disk involved, so spun-down disks will spin up during a run.
+
+_(Exclude patterns)_:
+: <textarea name="EXCLUDE_UI" rows="3" spellcheck="false" style="width:400px" placeholder="*.tmp"><?=htmlspecialchars($excludes)?></textarea>
+
+> One shell glob pattern per line. Matching files and folders are left out of the index.
+
+_(Index database)_:
+: <input type="text" name="DB_PATH" style="width:400px" value="<?=htmlspecialchars($cfg['DB_PATH'])?>">
+
+> Where the index is stored. The default lives in `appdata` so it survives a reboot. Avoid the USB flash
+> drive (`/boot`) because the database is rewritten on every run. The index of a large array can be a few hundred MB.
+
+_(Schedule)_:
+: <select name="SCHEDULE" onchange="ducSchedule(this.form)">
+  <?=mk_option($cfg['SCHEDULE'], 'disabled', _('Disabled (manual only)'))?>
+  <?=mk_option($cfg['SCHEDULE'], 'hourly', _('Hourly'))?>
+  <?=mk_option($cfg['SCHEDULE'], 'daily', _('Daily'))?>
+  <?=mk_option($cfg['SCHEDULE'], 'weekly', _('Weekly'))?>
+  <?=mk_option($cfg['SCHEDULE'], 'monthly', _('Monthly'))?>
+  <?=mk_option($cfg['SCHEDULE'], 'custom', _('Custom'))?>
+  </select>
+
+<div markdown="1" id="duc-hour">
+_(Time of day)_:
+: <select name="HOUR">
+  <?php for ($h = 0; $h < 24; $h++) echo mk_option($cfg['HOUR'], (string)$h, sprintf('%02d:00', $h)); ?>
+  </select>
+</div>
+
+<div markdown="1" id="duc-custom">
+_(Custom cron schedule)_:
+: <input type="text" name="CUSTOM_CRON" style="width:200px" value="<?=htmlspecialchars($cfg['CUSTOM_CRON'])?>">
+
+> Five cron fields: minute hour day-of-month month day-of-week, e.g. `30 2 * * 1-5`.
+</div>
+
+_(Run at low priority)_:
+: <select name="LOW_PRIORITY">
+  <?=mk_option($cfg['LOW_PRIORITY'], 'yes', _('Yes'))?>
+  <?=mk_option($cfg['LOW_PRIORITY'], 'no', _('No'))?>
+  </select>
+
+> Runs the indexer with `nice` and idle I/O priority so it stays out of the way of other work.
+
+_(Stay on one file system)_:
+: <select name="ONE_FS">
+  <?=mk_option($cfg['ONE_FS'], 'no', _('No'))?>
+  <?=mk_option($cfg['ONE_FS'], 'yes', _('Yes'))?>
+  </select>
+
+> Skip folders that are on a different file system, such as mounts inside a share.
+
+_(Count hard links once)_:
+: <select name="HARD_LINKS">
+  <?=mk_option($cfg['HARD_LINKS'], 'no', _('No'))?>
+  <?=mk_option($cfg['HARD_LINKS'], 'yes', _('Yes'))?>
+  </select>
+
+> Useful when you use hard links, for example with the *arr apps. This uses more memory while indexing.
+
+_(Notifications)_:
+: <select name="NOTIFY">
+  <?=mk_option($cfg['NOTIFY'], 'none', _('None'))?>
+  <?=mk_option($cfg['NOTIFY'], 'error', _('Errors only'))?>
+  <?=mk_option($cfg['NOTIFY'], 'all', _('Errors and completed runs'))?>
+  </select>
+
+&nbsp;
+: <input type="submit" value="_(Apply)_"><input type="button" value="_(Done)_" onclick="done()">
+
+</form>
+
+> The `duc` command is also available from the Unraid terminal. To browse in the terminal, run
+> `duc ui -d <?=htmlspecialchars($cfg['DB_PATH'])?> /mnt/user`.

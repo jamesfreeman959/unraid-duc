@@ -1,0 +1,65 @@
+name: Release
+
+# Builds duc, packages the plugin, publishes a GitHub release with the .txz and
+# then commits the updated plugin/duc.plg so Unraid sees the new version.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Plugin version (YYYY.MM.DD, add a letter for same-day releases e.g. 2026.10.05a)"
+        required: true
+      changes:
+        description: "Changelog entry (markdown bullet points)"
+        required: true
+        default: "- Updates"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate version
+        run: |
+          [[ "${{ inputs.version }}" =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]{2}[a-z]?$ ]] || { echo "bad version"; exit 1; }
+          if git ls-remote --exit-code --tags origin "refs/tags/${{ inputs.version }}" >/dev/null; then
+            echo "tag ${{ inputs.version }} already exists"; exit 1
+          fi
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build static duc
+        run: docker buildx build --platform linux/amd64 -f build/Dockerfile --output out .
+
+      - name: Smoke test duc
+        run: |
+          mkdir -p /tmp/t/a && head -c 100000 /dev/zero > /tmp/t/a/f
+          out/duc index -d /tmp/t.db /tmp/t
+          out/duc json -d /tmp/t.db --levels 2 /tmp/t | python3 -m json.tool > /dev/null
+
+      - name: Package
+        env:
+          CHANGES: ${{ inputs.changes }}
+        run: |
+          python3 build/package.py --version "${{ inputs.version }}" \
+            --changes "$(printf '### %s\n\n%s\n' "${{ inputs.version }}" "$CHANGES")"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHANGES: ${{ inputs.changes }}
+        run: |
+          gh release create "${{ inputs.version }}" dist/*.txz plugin/duc.plg \
+            --title "${{ inputs.version }}" --notes "$CHANGES"
+
+      - name: Commit plugin file
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add plugin/duc.plg
+          git commit -m "Release ${{ inputs.version }}"
+          git push

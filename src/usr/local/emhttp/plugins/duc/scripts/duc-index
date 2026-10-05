@@ -1,0 +1,174 @@
+#!/usr/bin/php -q
+<?php
+/*
+ * Build the duc index for all configured paths.
+ *
+ *   duc-index [cron|manual]   run the indexer in the foreground
+ *   duc-index --cancel        stop a running indexer
+ *
+ * The index is written to a temporary database and moved into place when
+ * complete, so the webGUI can keep browsing the previous index meanwhile.
+ */
+
+require_once '/usr/local/emhttp/plugins/duc/include/common.php';
+
+function log_line(string $msg): void
+{
+    file_put_contents(DUC_LOG, date('Y-m-d H:i:s') . " $msg\n", FILE_APPEND);
+}
+
+function notify(array $cfg, string $level, string $subject, string $desc): void
+{
+    $mode = $cfg['NOTIFY'] ?? 'error';
+    if ($mode === 'none' || ($mode === 'error' && $level !== 'alert')) return;
+    duc_run(['/usr/local/emhttp/webGui/scripts/notify', '-e', 'Disk Usage (duc)',
+             '-s', $subject, '-d', $desc, '-i', $level]);
+}
+
+function fail(array $cfg, array &$status, string $msg): void
+{
+    log_line("ERROR: $msg");
+    $status = array_merge($status, ['state' => 'failed', 'finished' => time(), 'message' => $msg]);
+    duc_write_status($status);
+    notify($cfg, 'alert', 'Disk usage index failed', $msg);
+    exit(1);
+}
+
+@mkdir(DUC_RUN_DIR, 0755, true);
+
+if (($argv[1] ?? '') === '--cancel') {
+    $status = duc_status();
+    $pid = (int)($status['pid'] ?? 0);
+    if (($status['state'] ?? '') === 'running' && $pid > 0) {
+        // The indexer runs in its own process group: signal duc and its wrappers together.
+        // SIGTERM is used numerically because the pcntl extension may be unavailable.
+        posix_kill(-$pid, 15) || posix_kill($pid, 15);
+        for ($i = 0; $i < 50 && file_exists("/proc/$pid"); $i++) usleep(100000);
+        $status = duc_status();
+        if (in_array($status['state'] ?? '', ['running', 'failed'])) {
+            // The indexer could not record this itself (no pcntl signal handler).
+            @unlink(($cfg = duc_config())['DB_PATH'] . '.new');
+            file_put_contents(DUC_LOG, date('Y-m-d H:i:s') . " Cancelled\n", FILE_APPEND);
+            duc_write_status(array_merge($status, ['state' => 'cancelled', 'finished' => time(),
+                                                   'message' => 'Cancelled', 'progress' => '']));
+        }
+        echo "Cancelled\n";
+    }
+    exit(0);
+}
+
+$lock = fopen(DUC_LOCK, 'c');
+if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) {
+    fwrite(STDERR, "duc-index: an index run is already in progress\n");
+    exit(2);
+}
+
+// Own process group so --cancel can signal duc and its nice/ionice wrappers together.
+@posix_setsid();
+$cfg = duc_config();
+$trigger = $argv[1] ?? 'manual';
+$status = ['state' => 'running', 'pid' => getmypid(), 'trigger' => $trigger,
+           'started' => time(), 'progress' => '', 'message' => ''];
+file_put_contents(DUC_LOG, '');
+duc_write_status($status);
+
+$cancelled = false;
+if (function_exists('pcntl_async_signals')) {
+    pcntl_async_signals(true);
+    pcntl_signal(SIGTERM, function () use (&$cancelled) { $cancelled = true; });
+}
+
+$db = $cfg['DB_PATH'] ?? '';
+if ($db === '' || $db[0] !== '/' || substr($db, -1) === '/') {
+    fail($cfg, $status, "Invalid database path '$db'");
+}
+// Only create the last directory component: if the parent is missing (e.g. the
+// array is stopped and /mnt/user/appdata is absent) refuse rather than writing to RAM.
+$dbdir = dirname($db);
+if (!is_dir($dbdir)) {
+    if (!is_dir(dirname($dbdir))) {
+        fail($cfg, $status, "Database folder $dbdir is not available (is the array started?)");
+    }
+    @mkdir($dbdir, 0755);
+}
+
+$paths = duc_index_paths($cfg);
+$missing = array_filter($paths, fn($p) => !is_dir($p));
+foreach ($missing as $p) log_line("WARNING: skipping $p (not found)");
+$paths = array_values(array_diff($paths, $missing));
+if (!$paths) {
+    fail($cfg, $status, 'None of the configured paths to index exist (is the array started?)');
+}
+
+$tmpdb = "$db.new";
+@unlink($tmpdb);
+
+$cmd = [];
+if (($cfg['LOW_PRIORITY'] ?? 'yes') === 'yes') {
+    $cmd = ['nice', '-n', '19', 'ionice', '-c', '3'];
+}
+$cmd = array_merge($cmd, [DUC_BIN, 'index', '-p', '-d', $tmpdb]);
+if (($cfg['ONE_FS'] ?? 'no') === 'yes') $cmd[] = '-x';
+if (($cfg['HARD_LINKS'] ?? 'no') === 'yes') $cmd[] = '-H';
+foreach (duc_exclude_patterns($cfg) as $pattern) {
+    $cmd[] = '-e';
+    $cmd[] = $pattern;
+}
+$cmd = array_merge($cmd, $paths);
+
+log_line('Indexing ' . implode(', ', $paths) . " into $db");
+
+$log = fopen(DUC_LOG, 'a');
+$proc = proc_open($cmd, [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => $log], $pipes);
+if (!is_resource($proc)) fail($cfg, $status, 'Unable to start duc');
+stream_set_blocking($pipes[1], false);
+
+$buf = '';
+$last = 0;
+while (true) {
+    if ($cancelled) {
+        proc_terminate($proc, 15);
+    }
+    $r = [$pipes[1]];
+    $w = $e = null;
+    if (@stream_select($r, $w, $e, 1) === false && !$cancelled) break;
+    $chunk = fread($pipes[1], 65536);
+    if ($chunk === '' && feof($pipes[1])) break;
+    $buf .= (string)$chunk;
+    // Progress lines are terminated by \r and prefixed with an ANSI clear-line code.
+    $parts = preg_split('/[\r\n]/', $buf);
+    $buf = array_pop($parts);
+    $parts = array_filter(array_map(fn($l) => trim(str_replace("\e[K", '', $l)), $parts), 'strlen');
+    if ($parts && time() - $last >= 2) {
+        $status['progress'] = end($parts);
+        duc_write_status($status);
+        $last = time();
+    }
+}
+fclose($pipes[1]);
+$rc = proc_close($proc);
+fclose($log);
+
+if ($cancelled) {
+    @unlink($tmpdb);
+    log_line('Cancelled');
+    $status = array_merge($status, ['state' => 'cancelled', 'finished' => time(), 'message' => 'Cancelled', 'progress' => '']);
+    duc_write_status($status);
+    exit(1);
+}
+
+if ($rc !== 0 || !is_file($tmpdb)) {
+    @unlink($tmpdb);
+    fail($cfg, $status, "duc index exited with code $rc, see " . DUC_LOG);
+}
+
+if (!rename($tmpdb, $db)) {
+    fail($cfg, $status, "Unable to move new index into place at $db");
+}
+
+$elapsed = time() - $status['started'];
+$summary = sprintf('Indexed %s in %dm %02ds', implode(', ', $paths), intdiv($elapsed, 60), $elapsed % 60);
+log_line($summary);
+$status = array_merge($status, ['state' => 'done', 'finished' => time(), 'message' => $summary, 'progress' => '']);
+duc_write_status($status);
+notify($cfg, 'normal', 'Disk usage index complete', $summary);
