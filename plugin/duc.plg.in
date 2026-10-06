@@ -15,7 +15,7 @@
   author="&author;"
   version="&version;"
   pluginURL="&pluginURL;"
-  support="https://github.com/&repo;/issues"
+  support="https://forums.unraid.net/topic/200807-plugin-disk-usage-duc/"
   launch="Settings/DiskUsage"
   icon="pie-chart"
   min="6.12.0"

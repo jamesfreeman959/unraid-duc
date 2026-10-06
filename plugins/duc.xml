@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Plugin>
+  <Name>Disk Usage (duc)</Name>
+  <Overview>Fast disk usage analysis for Unraid, powered by duc (https://duc.zevv.nl). duc indexes your shares and disks on a schedule (by default daily, at low CPU and I/O priority) and stores the results in a database, so browsing is instant and the disks aren't rescanned every time you look. Browse from the webGUI under Settings, User Utilities, Disk Usage, with a sunburst chart and a sorted folder listing showing size on disk, apparent size or file count. Index several roots at once, for example /mnt/user for usage per share and /mnt/disk1 or /mnt/cache for usage per disk. The full duc command line is included too, including the duc ui terminal browser. Note: an index run reads directory metadata on every disk it covers, so spun-down disks will spin up during a run.</Overview>
+  <PluginURL>https://raw.githubusercontent.com/jamesfreeman959/unraid-duc/main/plugin/duc.plg</PluginURL>
+  <PluginAuthor>jamesfreeman959</PluginAuthor>
+  <Support>https://forums.unraid.net/topic/200807-plugin-disk-usage-duc/</Support>
+  <Project>https://github.com/jamesfreeman959/unraid-duc</Project>
+  <ReadMe>https://raw.githubusercontent.com/jamesfreeman959/unraid-duc/main/README.md</ReadMe>
+  <Category>Tools:Utilities Tools:System</Category>
+  <ExtraSearchTerms>duc du ncdu disk usage space analyzer sunburst treemap storage</ExtraSearchTerms>
+  <Icon>https://raw.githubusercontent.com/jamesfreeman959/unraid-duc/main/icon.png</Icon>
+  <License>MIT</License>
+  <Screenshot>https://raw.githubusercontent.com/jamesfreeman959/unraid-duc/main/docs/screenshot.png</Screenshot>
+</Plugin>

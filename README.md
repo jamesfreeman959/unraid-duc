@@ -1,3 +1,5 @@
+<img src="icon.png" alt="" width="96" align="right">
+
 # Disk Usage (duc) for Unraid
 
 An Unraid plugin that packages [duc](https://duc.zevv.nl), the disk usage indexer and browser, and adds a page
@@ -7,6 +9,8 @@ duc works differently from `du` and `ncdu`. It scans the file system once, store
 and then answers every query from that index straight away. The disks are not scanned again until the next index run.
 With this plugin the index is rebuilt on a schedule (by default daily at 03:00, at low CPU and I/O priority), so you
 can open **Settings → User Utilities → Disk Usage** at any time and browse instantly.
+
+![Disk Usage page in the Unraid webGUI](docs/screenshot.png)
 
 ## Features
 
@@ -21,13 +25,20 @@ can open **Settings → User Utilities → Disk Usage** at any time and browse i
 
 ## Install
 
-In the Unraid webGUI go to **Plugins → Install Plugin** and paste:
+Search for **Disk Usage (duc)** in the **Apps** tab (Community Applications).
+
+To install it manually instead, go to **Plugins → Install Plugin** and paste:
 
 ```
 https://raw.githubusercontent.com/jamesfreeman959/unraid-duc/main/plugin/duc.plg
 ```
 
-Requires Unraid 6.12 or later (x86_64).
+Requires Unraid 6.12 or later (x86_64). Tested on Unraid 7.3.
+
+## Support
+
+Please ask questions in the [Unraid forum support thread](https://forums.unraid.net/topic/200807-plugin-disk-usage-duc/). Bug reports and feature requests are
+also welcome as [GitHub issues](https://github.com/jamesfreeman959/unraid-duc/issues).
 
 ## Notes
 
@@ -72,6 +83,18 @@ docker exec -d -w /usr/local/emhttp duc-test php -S 0.0.0.0:8080 -t /usr/local/e
 
 Run the **Release** workflow from the Actions tab with a version (`YYYY.MM.DD`) and changelog. It builds and
 smoke-tests duc, publishes a GitHub release with the `.txz`, and commits the updated `plugin/duc.plg`.
+
+### Repository layout
+
+| Path | Purpose |
+| --- | --- |
+| `plugin/duc.plg` | Plugin manifest installed by Unraid (generated from `plugin/duc.plg.in` at release time) |
+| `plugins/duc.xml` | Community Applications wrapper. `<PluginURL>` must match the `.plg`'s `pluginURL` exactly |
+| `ca_profile.xml` | Community Applications repository profile |
+| `icon.svg`, `icon.png` | Plugin and repository icon |
+| `src/` | Files installed on Unraid (packaged into the `.txz`) |
+| `build/`, `patches/` | Static duc build and packaging |
+| `test/` | Local harness for testing without Unraid |
 
 ## License
 
