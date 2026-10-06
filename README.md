@@ -86,12 +86,15 @@ smoke-tests duc, publishes a GitHub release with the `.txz`, and commits the upd
 
 ### Repository layout
 
+The Community Applications listing (wrapper XML and maintainer profile) lives in
+[jamesfreeman959/unraid-plugins](https://github.com/jamesfreeman959/unraid-plugins). Its `<PluginURL>` must keep
+matching the `pluginURL` in `plugin/duc.plg.in`.
+
+
 | Path | Purpose |
 | --- | --- |
 | `plugin/duc.plg` | Plugin manifest installed by Unraid (generated from `plugin/duc.plg.in` at release time) |
-| `plugins/duc.xml` | Community Applications wrapper. `<PluginURL>` must match the `.plg`'s `pluginURL` exactly |
-| `ca_profile.xml` | Community Applications repository profile |
-| `icon.svg`, `icon.png` | Plugin and repository icon |
+| `icon.svg`, `icon.png`, `docs/screenshot.png` | Icon and screenshot (also used by the Community Applications listing) |
 | `src/` | Files installed on Unraid (packaged into the `.txz`) |
 | `build/`, `patches/` | Static duc build and packaging |
 | `test/` | Local harness for testing without Unraid |

@@ -1,6 +1,7 @@
 name: Validate
 
-# Checks the Community Applications files stay valid and in sync with the plugin manifest.
+# Checks the plugin manifest is well-formed. The Community Applications listing lives in
+# jamesfreeman959/unraid-plugins, which checks its PluginURL against this repo's .plg.
 
 on:
   push:
@@ -15,26 +16,9 @@ jobs:
       - name: Install xmllint
         run: sudo apt-get update -qq && sudo apt-get install -y -qq libxml2-utils
 
-      - name: Well-formed XML
+      - name: Plugin manifest
         run: |
-          xmllint --noout ca_profile.xml plugins/*.xml
-          [[ ! -f plugin/duc.plg ]] || xmllint --noout --noent plugin/duc.plg
-
-      - name: ca_profile.xml has a Profile
-        run: |
-          profile=$(xmllint --xpath 'normalize-space(/CommunityApplications/Profile)' ca_profile.xml)
-          [[ -n "$profile" ]] || { echo "::error file=ca_profile.xml::<Profile> must not be empty"; exit 1; }
-
-      - name: Wrapper fields and PluginURL match
-        run: |
-          for f in plugins/*.xml; do
-            for tag in Name PluginURL Overview Support Project Category; do
-              v=$(xmllint --xpath "normalize-space(/Plugin/$tag)" "$f")
-              [[ -n "$v" ]] || { echo "::error file=$f::missing <$tag>"; exit 1; }
-            done
-          done
-          if [[ -f plugin/duc.plg ]]; then
-            plg=$(xmllint --noent --xpath 'string(/PLUGIN/@pluginURL)' plugin/duc.plg)
-            wrap=$(xmllint --xpath 'normalize-space(/Plugin/PluginURL)' plugins/duc.xml)
-            [[ "$plg" == "$wrap" ]] || { echo "::error::PluginURL mismatch: plg=$plg wrapper=$wrap"; exit 1; }
-          fi
+          xmllint --noout --noent plugin/duc.plg
+          url=$(xmllint --noent --xpath 'string(/PLUGIN/@pluginURL)' plugin/duc.plg)
+          expected="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/main/plugin/duc.plg"
+          [[ "$url" == "$expected" ]] || { echo "::error file=plugin/duc.plg::pluginURL is $url, expected $expected"; exit 1; }
