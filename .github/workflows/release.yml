@@ -40,6 +40,12 @@ jobs:
           mkdir -p /tmp/t/a && head -c 100000 /dev/zero > /tmp/t/a/f
           out/duc index -d /tmp/t.db /tmp/t
           out/duc json -d /tmp/t.db --levels 2 /tmp/t | python3 -m json.tool > /dev/null
+          # Top-level symlinks (Unraid exclusive shares) are followed; deeper ones are not
+          mkdir -p /tmp/pool/share && head -c 300000 /dev/zero > /tmp/pool/share/g
+          ln -s /tmp/pool/share /tmp/t/share && ln -s /tmp/pool /tmp/t/a/deep
+          out/duc index --follow-top-symlinks -d /tmp/t2.db /tmp/t
+          out/duc ls -b -d /tmp/t2.db /tmp/t | tee /dev/stderr | grep -E '^ *[0-9]{6,} +share$'
+          out/duc ls -b -d /tmp/t2.db /tmp/t/a | tee /dev/stderr | grep -E '^ *[0-9]{1,4} +deep$'
 
       - name: Package
         env:

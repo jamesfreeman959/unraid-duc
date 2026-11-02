@@ -1,0 +1,76 @@
+diff -ru a/src/duc/cmd-index.c b/src/duc/cmd-index.c
+--- a/src/duc/cmd-index.c	2026-11-02 12:28:45.700592549 +0000
++++ b/src/duc/cmd-index.c	2026-11-02 12:29:00.690385666 +0000
+@@ -27,6 +27,7 @@
+ static int opt_uid = 0;
+ static int opt_max_depth = 0;
+ static bool opt_one_file_system = false;
++static bool opt_follow_top_symlinks = false;
+ static bool opt_progress = false;
+ static bool opt_uncompressed = false;
+ static bool opt_dryrun = false;
+@@ -74,6 +75,7 @@
+ 	if(opt_force) open_flags |= DUC_OPEN_FORCE;
+ 	if(opt_max_depth) duc_index_req_set_maxdepth(req, opt_max_depth);
+ 	if(opt_one_file_system) index_flags |= DUC_INDEX_XDEV;
++	if(opt_follow_top_symlinks) index_flags |= DUC_INDEX_FOLLOW_TOP_SYMLINKS;
+ 	if(opt_hide_file_names) index_flags |= DUC_INDEX_HIDE_FILE_NAMES;
+ 	if(opt_check_hard_links) index_flags |= DUC_INDEX_CHECK_HARD_LINKS;
+ 	if(opt_uncompressed) open_flags &= ~DUC_OPEN_COMPRESS;
+@@ -167,6 +169,9 @@
+ 	{ fn_exclude,           "exclude",         'e', DUCRC_TYPE_FUNC,   "exclude files matching VAL"  },
+ 	{ &opt_check_hard_links,"check-hard-links",'H', DUCRC_TYPE_BOOL,   "count hard links only once",
+           "if two or more hard links point to the same file, only one of the hard links is displayed and counted" },
++	{ &opt_follow_top_symlinks, "follow-top-symlinks", 0, DUCRC_TYPE_BOOL, "follow symlinks to directories directly below PATH",
++	  "symlinks found in the top level of each indexed path are indexed as the directories they point to. "
++	  "Symlinks deeper in the tree are never followed" },
+ 	{ &opt_force,           "force",           'f', DUCRC_TYPE_BOOL,   "force writing in case of corrupted db" },
+ 	{ fn_fs_exclude,        "fs-exclude",       0,  DUCRC_TYPE_FUNC,   "exclude file system type VAL during indexing",
+ 	  "VAL is a comma separated list of file system types as found in your systems fstab, for example ext3,ext4,dosfs" },
+diff -ru a/src/libduc/duc.h b/src/libduc/duc.h
+--- a/src/libduc/duc.h	2026-11-02 12:28:45.699037569 +0000
++++ b/src/libduc/duc.h	2026-11-02 12:29:00.685165870 +0000
+@@ -38,6 +38,7 @@
+ 	DUC_INDEX_HIDE_FILE_NAMES  = 1<<1, /* Hide file names */
+ 	DUC_INDEX_CHECK_HARD_LINKS = 1<<2, /* Count hard links only once during indexing */
+ 	DUC_INDEX_DRY_RUN          = 1<<3, /* Do not touch the database */
++	DUC_INDEX_FOLLOW_TOP_SYMLINKS = 1<<4, /* Follow symlinks to directories in the top level of each indexed path */
+ } duc_index_flags;
+ 
+ typedef enum {
+diff -ru a/src/libduc/index.c b/src/libduc/index.c
+--- a/src/libduc/index.c	2026-11-02 12:28:45.699783898 +0000
++++ b/src/libduc/index.c	2026-11-02 12:29:10.680712089 +0000
+@@ -463,6 +463,21 @@
+ 			continue;
+ 		}
+ 
++		/* Optionally follow symlinks to directories in the top level of the
++		 * indexed path. These are indexed as part of the tree even when they
++		 * lead to another file system. Deeper symlinks are never followed, so
++		 * this cannot loop */
++
++		int followed = 0;
++		if(S_ISLNK(st_ent.st_mode) && scanner_dir->depth == 0 &&
++		   (req->flags & DUC_INDEX_FOLLOW_TOP_SYMLINKS)) {
++			struct stat st_target;
++			if(stat(name, &st_target) == 0 && S_ISDIR(st_target.st_mode)) {
++				st_ent = st_target;
++				followed = 1;
++			}
++		}
++
+ 		/* If this dirent lies on a different device, check the file system type of the new
+ 		 * device and skip if it is not on the list of approved types */
+ 
+@@ -497,8 +512,8 @@
+ 
+ 		/* Check if we can cross file system boundaries */
+ 
+-		if((ent.type == DUC_FILE_TYPE_DIR) && (req->flags & DUC_INDEX_XDEV) &&
+-		   (st_ent.st_dev != req->dev)) {
++		if((ent.type == DUC_FILE_TYPE_DIR) && (req->flags & DUC_INDEX_XDEV) && !followed &&
++		   (st_ent.st_dev != scanner_dir->ent.devino.dev)) {
+ 			report_skip(duc, name, "Not crossing file system boundaries");
+ 			continue;
+ 		}

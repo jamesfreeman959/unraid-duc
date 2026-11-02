@@ -47,6 +47,9 @@ also welcome as [GitHub issues](https://github.com/jamesfreeman959/unraid-duc/is
 - **Database location:** by default `/mnt/user/appdata/duc/duc.db`. Keep it off the USB flash drive, because it is
   rewritten on every run. If the database folder isn't available (for example when the array is stopped) the run is
   skipped and nothing is written to RAM.
+- **Exclusive shares:** shares that live only on a pool are linked into `/mnt/user` by Unraid as symlinks to
+  `/mnt/<pool>/<share>`. When `/mnt/user` is indexed these links are followed, so the shares show up with their
+  real size. Symlinks deeper in the tree are never followed.
 - Paths in the settings are stored comma separated, so paths containing commas are not supported.
 
 ## How it's built

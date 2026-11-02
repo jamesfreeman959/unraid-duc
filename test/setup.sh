@@ -26,3 +26,6 @@ mk /mnt/user/backups/laptop/full.img 30000000; mk /mnt/user/backups/phone/photos
 mk /mnt/user/isos/debian.iso 25000000
 mk "/mnt/user/Weird <img src=x onerror=alert(1)>/q\"uote's.txt" 3000000
 mkdir -p /mnt/disk1 && mk /mnt/disk1/onlyondisk.bin 5000000
+# exclusive share: /mnt/user/<share> is a symlink to the pool
+mkdir -p /mnt/cache/exclusive/sub && mk /mnt/cache/exclusive/sub/pool.bin 7000000
+ln -sfn /mnt/cache/exclusive /mnt/user/exclusive

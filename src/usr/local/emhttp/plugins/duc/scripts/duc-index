@@ -109,6 +109,9 @@ if (($cfg['LOW_PRIORITY'] ?? 'yes') === 'yes') {
 }
 $cmd = array_merge($cmd, [DUC_BIN, 'index', '-p', '-d', $tmpdb]);
 if (($cfg['ONE_FS'] ?? 'no') === 'yes') $cmd[] = '-x';
+// Exclusive shares (Unraid 6.12+) appear in /mnt/user as symlinks to /mnt/<pool>/<share>,
+// which duc would otherwise record as tiny links instead of indexing their contents.
+if (in_array('/mnt/user', $paths, true)) $cmd[] = '--follow-top-symlinks';
 if (($cfg['HARD_LINKS'] ?? 'no') === 'yes') $cmd[] = '-H';
 foreach (duc_exclude_patterns($cfg) as $pattern) {
     $cmd[] = '-e';
