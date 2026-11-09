@@ -65,3 +65,130 @@ function duc_run(array $argv): array
     fclose($pipes[2]);
     return [proc_close($proc), $out, $err];
 }
+
+/* ---------- size history ---------- */
+
+// Folders below the first level are only recorded from this size, to keep the history small.
+const DUC_HISTORY_MIN_SIZE = 1073741824;
+const DUC_JSON_FLAGS = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE;
+
+function duc_history_enabled(array $cfg): bool
+{
+    return ($cfg['HISTORY'] ?? 'yes') === 'yes';
+}
+
+/* The history lives next to the index: duc.db -> duc.history.jsonl */
+function duc_history_file(array $cfg): string
+{
+    $db = $cfg['DB_PATH'] ?? '';
+    return $db === '' ? '' : preg_replace('/\.db$/', '', $db) . '.history.jsonl';
+}
+
+function duc_history_depth(array $cfg): int
+{
+    return max(1, min(3, (int)($cfg['HISTORY_DEPTH'] ?? 2)));
+}
+
+/* Path of $path relative to $root ('' for the root itself), or null if it is outside. */
+function duc_relative(string $root, string $path): ?string
+{
+    if ($path === $root) return '';
+    $prefix = $root === '/' ? '/' : "$root/";
+    return strncmp($path, $prefix, strlen($prefix)) === 0 ? substr($path, strlen($prefix)) : null;
+}
+
+/*
+ * Append one line per root to the history file:
+ *   {"time":..., "root":"/mnt/user", "entries":{"": [actual, apparent, count], "appdata": [...], ...}}
+ * The sizes come from the index that was just built, so nothing is scanned again.
+ * Returns the number of folders recorded.
+ */
+function duc_record_history(array $cfg, string $db, array $roots, int $time): int
+{
+    $file = duc_history_file($cfg);
+    if ($file === '') throw new RuntimeException('No database path configured');
+    $depth = duc_history_depth($cfg);
+    $passes = [[1, 0]];
+    if ($depth > 1) $passes[] = [$depth, DUC_HISTORY_MIN_SIZE];
+
+    $lines = '';
+    $recorded = 0;
+    foreach ($roots as $root) {
+        $entries = [];
+        foreach ($passes as [$levels, $min]) {
+            [$rc, $out, $err] = duc_run([DUC_BIN, 'json', '-d', $db, '--levels', (string)$levels,
+                                         '--min_size', (string)$min, $root]);
+            $tree = $rc === 0 ? json_decode($out, true, 512, JSON_INVALID_UTF8_SUBSTITUTE) : null;
+            if (!is_array($tree)) {
+                throw new RuntimeException("Unable to read $root from the index: " . (strtok(trim($err), "\n") ?: 'invalid JSON'));
+            }
+            $entries[''] = [(int)$tree['size_actual'], (int)$tree['size_apparent'], (int)$tree['count']];
+            $walk = function (array $node, string $rel, int $level) use (&$walk, &$entries, $levels) {
+                foreach ($node['children'] ?? [] as $child) {
+                    if (($child['type'] ?? '') !== 'dir') continue;
+                    $key = $rel === '' ? (string)$child['name'] : "$rel/{$child['name']}";
+                    $entries[$key] = [(int)$child['size_actual'], (int)$child['size_apparent'], (int)$child['count']];
+                    if ($level < $levels) $walk($child, $key, $level + 1);
+                }
+            };
+            $walk($tree, '', 1);
+        }
+        $recorded += count($entries) - 1;
+        $lines .= json_encode(['time' => $time, 'root' => $root, 'entries' => (object)$entries], DUC_JSON_FLAGS) . "\n";
+    }
+
+    duc_prune_history($file, (int)($cfg['HISTORY_DAYS'] ?? 0), $time);
+    if (@file_put_contents($file, $lines, FILE_APPEND | LOCK_EX) === false) {
+        throw new RuntimeException("Unable to write $file");
+    }
+    return $recorded;
+}
+
+/* Drop snapshots older than $days (0 keeps everything). */
+function duc_prune_history(string $file, int $days, int $now): void
+{
+    if ($days <= 0 || !is_file($file)) return;
+    $cutoff = $now - $days * 86400;
+    $keep = [];
+    $dropped = false;
+    foreach (file($file) ?: [] as $line) {
+        $s = json_decode($line, true);
+        if (is_array($s) && (int)($s['time'] ?? 0) < $cutoff) { $dropped = true; continue; }
+        $keep[] = $line;
+    }
+    if (!$dropped) return;
+    if (@file_put_contents("$file.tmp", implode('', $keep)) !== false) @rename("$file.tmp", $file);
+}
+
+/*
+ * History of one folder and its subfolders:
+ *   points   [[time, actual, apparent, count], ...] for $path itself
+ *   children {name: [[time, actual, apparent, count], ...]} for the folders directly below it
+ */
+function duc_read_history(array $cfg, string $root, string $rel): array
+{
+    $points = [];
+    $children = [];
+    $since = null;
+    $fh = @fopen(duc_history_file($cfg), 'r');
+    if ($fh) {
+        $prefix = $rel === '' ? '' : "$rel/";
+        while (($line = fgets($fh)) !== false) {
+            $s = json_decode($line, true, 512, JSON_INVALID_UTF8_SUBSTITUTE);
+            if (!is_array($s) || ($s['root'] ?? null) !== $root || !is_array($s['entries'] ?? null)) continue;
+            $t = (int)$s['time'];
+            $since = $since ?? $t;
+            foreach ($s['entries'] as $key => $v) {
+                $key = (string)$key;
+                if ($key === $rel) {
+                    $points[] = array_merge([$t], $v);
+                } elseif ($prefix === '' || strncmp($key, $prefix, strlen($prefix)) === 0) {
+                    $name = substr($key, strlen($prefix));
+                    if ($name !== '' && strpos($name, '/') === false) $children[$name][] = array_merge([$t], $v);
+                }
+            }
+        }
+        fclose($fh);
+    }
+    return ['since' => $since, 'points' => $points, 'children' => (object)$children];
+}

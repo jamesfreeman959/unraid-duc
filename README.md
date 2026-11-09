@@ -20,6 +20,8 @@ can open **Settings → User Utilities → Disk Usage** at any time and browse i
 - Index several roots, for example `/mnt/user` for usage per share plus `/mnt/disk1` and `/mnt/cache` for usage per disk.
 - The previous index stays browsable while a new one is built. The new database only replaces it once indexing has finished.
 - Exclude patterns, one-file-system mode, counting hard links once (useful with the *arr apps), and Unraid notifications.
+- Size history: after each run the sizes of the top folders are recorded, so the page shows how a folder grew over
+  time and the change per subfolder over the last 7, 30 or 90 days, a year or the whole history.
 - The full `duc` CLI from the terminal, including the ncurses browser:
   `duc ui -d /mnt/user/appdata/duc/duc.db /mnt/user`
 
@@ -50,6 +52,10 @@ also welcome as [GitHub issues](https://github.com/jamesfreeman959/unraid-duc/is
 - **Exclusive shares:** shares that live only on a pool are linked into `/mnt/user` by Unraid as symlinks to
   `/mnt/<pool>/<share>`. When `/mnt/user` is indexed these links are followed, so the shares show up with their
   real size. Symlinks deeper in the tree are never followed.
+- **Size history:** stored as one JSON line per run and index root in `duc.history.jsonl` next to the database
+  (a few KB per run). It is taken from the new index, so nothing is scanned twice. The first level below each
+  root (the shares, for `/mnt/user`) is always recorded; deeper levels (up to three, see *History depth*) only for
+  folders of 1 GB or more. Snapshots older than the retention setting (default two years) are removed.
 - Paths in the settings are stored comma separated, so paths containing commas are not supported.
 
 ## How it's built

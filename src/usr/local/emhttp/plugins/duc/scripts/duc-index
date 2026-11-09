@@ -169,6 +169,15 @@ if (!rename($tmpdb, $db)) {
     fail($cfg, $status, "Unable to move new index into place at $db");
 }
 
+if (duc_history_enabled($cfg)) {
+    try {
+        $n = duc_record_history($cfg, $db, $paths, $status['started']);
+        log_line("Recorded size history for $n folders in " . duc_history_file($cfg));
+    } catch (Throwable $e) {
+        log_line('WARNING: size history not recorded: ' . $e->getMessage());
+    }
+}
+
 $elapsed = time() - $status['started'];
 $summary = sprintf('Indexed %s in %dm %02ds', implode(', ', $paths), intdiv($elapsed, 60), $elapsed % 60);
 log_line($summary);

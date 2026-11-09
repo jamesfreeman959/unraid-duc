@@ -4,6 +4,8 @@
  *
  *   GET  ?action=status                       indexer state + database info
  *   GET  ?action=ls&path=/mnt/user&levels=3   directory tree from the index
+ *   GET  ?action=history&root=/mnt/user&path=/mnt/user/appdata
+ *                                             recorded sizes of a folder and its subfolders
  *   POST action=index                         start an index run
  *   POST action=cancel                        cancel a running index
  *
@@ -71,6 +73,17 @@ case 'ls':
     header('Cache-Control: no-store');
     echo $out;
     exit;
+
+case 'history':
+    if ($_SERVER['REQUEST_METHOD'] !== 'GET') reply(405, ['error' => 'GET required']);
+    $root = (string)($_GET['root'] ?? '');
+    $path = (string)($_GET['path'] ?? '');
+    $rel = ($root !== '' && $root[0] === '/') ? duc_relative($root, $path) : null;
+    if ($rel === null) reply(400, ['error' => 'Invalid path']);
+    $enabled = duc_history_enabled($cfg);
+    reply(200, array_merge(['enabled' => $enabled, 'depth' => duc_history_depth($cfg)],
+                           $enabled ? duc_read_history($cfg, $root, $rel)
+                                    : ['since' => null, 'points' => [], 'children' => (object)[]]));
 
 case 'index':
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') reply(405, ['error' => 'POST required']);
