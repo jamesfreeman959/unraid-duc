@@ -324,7 +324,8 @@ var DucBrowser = (function () {
     var children = hist && hist.enabled && ref ? hist.children : null;
     el.table.classList.toggle('no-delta', !children || !Object.keys(children).length);
     el.deltaHead.textContent = ref ? opt.text.historySince + ' ' + shortDate(ref[0]) : opt.text.change;
-    el.deltaHead.title = opt.text.changeTitle;
+    el.deltaHead.title = ref ? opt.text.historySince + ' ' + longDate(ref[0], true) + '. ' + opt.text.changeTitle
+                             : opt.text.changeTitle;
     var total = value(tree);
     var kids = tree.children || [];
     if (!kids.length) {
@@ -395,8 +396,15 @@ var DucBrowser = (function () {
 
   function pointValue(p) { return p[COLUMN[state.mode]]; }
 
+  /* Month names keep dates unambiguous in every locale (9 Nov, Nov 9, 9. Nov.). */
   function shortDate(t) {
-    return new Date(t * 1000).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' });
+    return new Date(t * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  }
+
+  function longDate(t, withTime) {
+    var o = { day: 'numeric', month: 'short', year: 'numeric' };
+    if (withTime) { o.hour = '2-digit'; o.minute = '2-digit'; }
+    return new Date(t * 1000).toLocaleString(undefined, o);
   }
 
   /* The snapshot of the current folder that changes are measured against: the newest one at
@@ -425,7 +433,7 @@ var DucBrowser = (function () {
     var d = current - pointValue(base);
     td.textContent = d === 0 ? '0' : (d > 0 ? '+' : '−') + fmt(Math.abs(d));
     td.className += d > 0 ? ' up' : (d < 0 ? ' down' : ' same');
-    td.title = opt.text.historySince + ' ' + new Date(base[0] * 1000).toLocaleString() + ': ' + fmt(pointValue(base));
+    td.title = opt.text.historySince + ' ' + longDate(base[0], true) + ': ' + fmt(pointValue(base));
   }
 
   function svg(name, attrs, parentNode) {
@@ -452,7 +460,7 @@ var DucBrowser = (function () {
       el.hchart.style.display = 'none';
       return;
     }
-    el.hnote.textContent = opt.text.historySince + ' ' + new Date(ref[0] * 1000).toLocaleDateString();
+    el.hnote.textContent = opt.text.historySince + ' ' + longDate(ref[0]);
     el.hchart.style.display = '';
 
     var pts = all.filter(function (p) { return p[0] >= ref[0]; });
@@ -472,7 +480,7 @@ var DucBrowser = (function () {
     }
     [t0, (t0 + t1) / 2, t1].forEach(function (t, i) {
       svg('text', { x: x(t), y: c.h - 6, 'text-anchor': ['start', 'middle', 'end'][i] })
-        .textContent = new Date(t * 1000).toLocaleDateString();
+        .textContent = new Date(t0 * 1000).getFullYear() === new Date(t1 * 1000).getFullYear() ? shortDate(t) : longDate(t);
     });
 
     var line = pts.map(function (p, i) { return (i ? 'L' : 'M') + x(p[0]).toFixed(1) + ' ' + y(pointValue(p)).toFixed(1); }).join(' ');
@@ -490,7 +498,7 @@ var DucBrowser = (function () {
       marker.setAttribute('cx', x(best[0]));
       marker.setAttribute('cy', y(pointValue(best)));
       marker.style.display = '';
-      el.htip.textContent = new Date(best[0] * 1000).toLocaleString() + ': ' + fmt(pointValue(best));
+      el.htip.textContent = longDate(best[0], true) + ': ' + fmt(pointValue(best));
       var wrap = el.hchart.parentNode.getBoundingClientRect();
       el.htip.style.display = 'block';
       var left = e.clientX - wrap.left + 14;
