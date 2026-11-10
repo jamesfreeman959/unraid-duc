@@ -223,6 +223,7 @@ var DucBrowser = (function () {
     el.list.textContent = '';
     el.more.textContent = '';
     el.history.style.display = 'none';
+    el.periodLabel.style.display = 'none';
     state.listTree = state.history = null;
   }
 
@@ -322,6 +323,8 @@ var DucBrowser = (function () {
     var ref = referencePoint();
     var children = hist && hist.enabled && ref ? hist.children : null;
     el.table.classList.toggle('no-delta', !children || !Object.keys(children).length);
+    el.deltaHead.textContent = ref ? opt.text.historySince + ' ' + shortDate(ref[0]) : opt.text.change;
+    el.deltaHead.title = opt.text.changeTitle;
     var total = value(tree);
     var kids = tree.children || [];
     if (!kids.length) {
@@ -392,6 +395,10 @@ var DucBrowser = (function () {
 
   function pointValue(p) { return p[COLUMN[state.mode]]; }
 
+  function shortDate(t) {
+    return new Date(t * 1000).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' });
+  }
+
   /* The snapshot of the current folder that changes are measured against: the newest one at
      least `period` days old, or the oldest one when the history is shorter than that. */
   function referencePoint() {
@@ -432,6 +439,7 @@ var DucBrowser = (function () {
     var hist = state.history;
     el.hchart.textContent = '';
     hideHistoryTip();
+    el.periodLabel.style.display = hist && hist.enabled ? '' : 'none';
     if (!hist || !hist.enabled) { el.history.style.display = 'none'; return; }
     el.history.style.display = '';
 
@@ -484,9 +492,11 @@ var DucBrowser = (function () {
       marker.style.display = '';
       el.htip.textContent = new Date(best[0] * 1000).toLocaleString() + ': ' + fmt(pointValue(best));
       var wrap = el.hchart.parentNode.getBoundingClientRect();
-      el.htip.style.left = (e.clientX - wrap.left + 14) + 'px';
-      el.htip.style.top = (e.clientY - wrap.top + 14) + 'px';
       el.htip.style.display = 'block';
+      var left = e.clientX - wrap.left + 14;
+      if (left + el.htip.offsetWidth > wrap.width) left = e.clientX - wrap.left - el.htip.offsetWidth - 14;
+      el.htip.style.left = Math.max(0, left) + 'px';
+      el.htip.style.top = (e.clientY - wrap.top + 14) + 'px';
     });
     hit.addEventListener('mouseleave', function () { marker.style.display = 'none'; hideHistoryTip(); });
   }
@@ -506,6 +516,8 @@ var DucBrowser = (function () {
     el.hnote = $('duc-history-note');
     el.htip = $('duc-history-tip');
     el.period = $('duc-period');
+    el.periodLabel = $('duc-period-label');
+    el.deltaHead = $('duc-delta-head');
 
     state.mode = store('mode') || 'actual';
     el.mode.value = state.mode;
