@@ -408,12 +408,15 @@ var DucBrowser = (function () {
   }
 
   /* The snapshot of the current folder that changes are measured against: the newest one at
-     least `period` days old, or the oldest one when the history is shorter than that. */
+     least `period` days older than the latest run, or the oldest one when the history is shorter.
+     The slack lets a run that started a little later than the day before still count as a day old. */
+  var PERIOD_SLACK = 3 * 3600;
+
   function referencePoint() {
     var pts = state.history && state.history.points;
     if (!pts || pts.length < 2) return null;
     if (!state.period) return pts[0];
-    var cutoff = Date.now() / 1000 - state.period * 86400;
+    var cutoff = pts[pts.length - 1][0] - state.period * 86400 + PERIOD_SLACK;
     var ref = pts[0];
     for (var i = 1; i < pts.length && pts[i][0] <= cutoff; i++) ref = pts[i];
     return ref === pts[pts.length - 1] ? pts[pts.length - 2] : ref;

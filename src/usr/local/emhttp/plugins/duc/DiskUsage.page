@@ -24,6 +24,7 @@ Markdown="false"
     </label>
     <label id="duc-period-label" style="display:none">_(Change over)_:
       <select id="duc-period">
+        <option value="1">_(1 day)_</option>
         <option value="7">_(7 days)_</option>
         <option value="30">_(30 days)_</option>
         <option value="90">_(90 days)_</option>
