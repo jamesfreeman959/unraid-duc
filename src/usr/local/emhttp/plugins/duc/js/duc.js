@@ -439,6 +439,19 @@ var DucBrowser = (function () {
     td.title = opt.text.historySince + ' ' + longDate(base[0], true) + ': ' + fmt(pointValue(base));
   }
 
+  /* Sizes on the history chart share one unit and enough decimals to tell the grid lines apart,
+     so that small changes on a large share (29.21T vs 29.27T) stay visible. */
+  function chartFormat(lo, hi) {
+    if (state.mode === 'count') return function (v) { return Math.round(v).toLocaleString(); };
+    var units = ['B', 'K', 'M', 'G', 'T', 'P'], i = 0, f = 1;
+    while (hi / f >= 1024 && i < units.length - 1) { f *= 1024; i++; }
+    var step = (hi - lo) / 3 / f;
+    var digits = i === 0 ? 0 : Math.max(0, Math.min(3, Math.ceil(-Math.log10(step))));
+    return function (v, extra) { return (v / f).toFixed(Math.min(3, digits + (extra || 0))) + units[i]; };
+  }
+
+  function signed(d) { return d === 0 ? '±0' : (d > 0 ? '+' : '−') + fmt(Math.abs(d)); }
+
   function svg(name, attrs, parentNode) {
     var n = document.createElementNS(SVGNS, name);
     Object.keys(attrs).forEach(function (k) { n.setAttribute(k, attrs[k]); });
@@ -475,11 +488,12 @@ var DucBrowser = (function () {
     var c = CHART, pw = c.w - c.left - c.right, ph = c.h - c.top - c.bottom;
     function x(t) { return c.left + (t1 > t0 ? (t - t0) / (t1 - t0) * pw : pw / 2); }
     function y(v) { return c.top + (1 - (v - lo) / (hi - lo)) * ph; }
+    var cf = chartFormat(lo, hi);
 
     for (var g = 0; g <= 3; g++) {
       var gv = lo + (hi - lo) * g / 3;
       svg('line', { x1: c.left, x2: c.w - c.right, y1: y(gv), y2: y(gv), 'class': 'grid' });
-      svg('text', { x: c.left - 6, y: y(gv) + 4, 'text-anchor': 'end' }).textContent = fmt(Math.round(gv));
+      svg('text', { x: c.left - 6, y: y(gv) + 4, 'text-anchor': 'end' }).textContent = cf(gv);
     }
     [t0, (t0 + t1) / 2, t1].forEach(function (t, i) {
       svg('text', { x: x(t), y: c.h - 6, 'text-anchor': ['start', 'middle', 'end'][i] })
@@ -496,12 +510,14 @@ var DucBrowser = (function () {
     hit.addEventListener('mousemove', function (e) {
       var box = el.hchart.getBoundingClientRect();
       var t = t0 + ((e.clientX - box.left) / box.width * c.w - c.left) / pw * (t1 - t0);
-      var best = pts[0];
-      pts.forEach(function (p) { if (Math.abs(p[0] - t) < Math.abs(best[0] - t)) best = p; });
+      var bi = 0;
+      pts.forEach(function (p, i) { if (Math.abs(p[0] - t) < Math.abs(pts[bi][0] - t)) bi = i; });
+      var best = pts[bi];
       marker.setAttribute('cx', x(best[0]));
       marker.setAttribute('cy', y(pointValue(best)));
       marker.style.display = '';
-      el.htip.textContent = longDate(best[0], true) + ': ' + fmt(pointValue(best));
+      el.htip.textContent = longDate(best[0], true) + ': ' + cf(pointValue(best), 1) +
+        (bi > 0 ? ' (' + signed(pointValue(best) - pointValue(pts[bi - 1])) + ')' : '');
       var wrap = el.hchart.parentNode.getBoundingClientRect();
       el.htip.style.display = 'block';
       var left = e.clientX - wrap.left + 14;
