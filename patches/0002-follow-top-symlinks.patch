@@ -1,6 +1,6 @@
 diff -ru a/src/duc/cmd-index.c b/src/duc/cmd-index.c
---- a/src/duc/cmd-index.c	2026-11-02 12:28:45.700592549 +0000
-+++ b/src/duc/cmd-index.c	2026-11-02 12:29:00.690385666 +0000
+--- a/src/duc/cmd-index.c	2026-11-12 12:26:15.921375781 +0000
++++ b/src/duc/cmd-index.c	2026-11-12 12:26:15.923068392 +0000
 @@ -27,6 +27,7 @@
  static int opt_uid = 0;
  static int opt_max_depth = 0;
@@ -28,8 +28,8 @@ diff -ru a/src/duc/cmd-index.c b/src/duc/cmd-index.c
  	{ fn_fs_exclude,        "fs-exclude",       0,  DUCRC_TYPE_FUNC,   "exclude file system type VAL during indexing",
  	  "VAL is a comma separated list of file system types as found in your systems fstab, for example ext3,ext4,dosfs" },
 diff -ru a/src/libduc/duc.h b/src/libduc/duc.h
---- a/src/libduc/duc.h	2026-11-02 12:28:45.699037569 +0000
-+++ b/src/libduc/duc.h	2026-11-02 12:29:00.685165870 +0000
+--- a/src/libduc/duc.h	2026-11-12 12:26:15.935797223 +0000
++++ b/src/libduc/duc.h	2026-11-12 12:26:15.938316872 +0000
 @@ -38,6 +38,7 @@
  	DUC_INDEX_HIDE_FILE_NAMES  = 1<<1, /* Hide file names */
  	DUC_INDEX_CHECK_HARD_LINKS = 1<<2, /* Count hard links only once during indexing */
@@ -39,9 +39,25 @@ diff -ru a/src/libduc/duc.h b/src/libduc/duc.h
  
  typedef enum {
 diff -ru a/src/libduc/index.c b/src/libduc/index.c
---- a/src/libduc/index.c	2026-11-02 12:28:45.699783898 +0000
-+++ b/src/libduc/index.c	2026-11-02 12:29:10.680712089 +0000
-@@ -463,6 +463,21 @@
+--- a/src/libduc/index.c	2026-11-12 12:26:15.955473664 +0000
++++ b/src/libduc/index.c	2026-11-12 12:26:15.957311694 +0000
+@@ -426,9 +426,15 @@
+ 	report->dir_count ++;
+ 	duc_size_accum(&report->size, &scanner_dir->ent.size);
+ 
++	/* Remember where we came from. A followed top-level symlink leads into
++	 * another tree, where chdir("..") would not return to this directory */
++
++	int fd_parent = open(".", O_RDONLY | O_DIRECTORY);
++
+ 	r = chdir(scanner_dir->ent.name);
+ 	if(r != 0) {
+ 		report_skip(duc, scanner_dir->ent.name, strerror(errno));
++		if(fd_parent != -1) close(fd_parent);
+ 		return;
+ 	}
+ 
+@@ -463,6 +469,21 @@
  			continue;
  		}
  
@@ -63,7 +79,7 @@ diff -ru a/src/libduc/index.c b/src/libduc/index.c
  		/* If this dirent lies on a different device, check the file system type of the new
  		 * device and skip if it is not on the list of approved types */
  
-@@ -497,8 +512,8 @@
+@@ -497,8 +518,8 @@
  
  		/* Check if we can cross file system boundaries */
  
@@ -74,3 +90,17 @@ diff -ru a/src/libduc/index.c b/src/libduc/index.c
  			report_skip(duc, name, "Not crossing file system boundaries");
  			continue;
  		}
+@@ -541,7 +562,12 @@
+ 		}
+ 	}
+ 
+-	r = chdir("..");
++	if(fd_parent != -1) {
++		r = fchdir(fd_parent);
++		close(fd_parent);
++	} else {
++		r = chdir("..");
++	}
+ 	if(r != 0) {
+ 		report_skip(duc, scanner_dir->ent.name, strerror(errno));
+ 		return;

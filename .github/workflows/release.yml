@@ -43,8 +43,12 @@ jobs:
           # Top-level symlinks (Unraid exclusive shares) are followed; deeper ones are not
           mkdir -p /tmp/pool/share && head -c 300000 /dev/zero > /tmp/pool/share/g
           ln -s /tmp/pool/share /tmp/t/share && ln -s /tmp/pool /tmp/t/a/deep
+          # Siblings read after the followed symlink must still be indexed
+          for d in b c d e f g h; do mkdir /tmp/t/$d && head -c 100000 /dev/zero > /tmp/t/$d/f; done
           out/duc index --follow-top-symlinks -d /tmp/t2.db /tmp/t
-          out/duc ls -b -d /tmp/t2.db /tmp/t | tee /dev/stderr | grep -E '^ *[0-9]{6,} +share$'
+          out/duc ls -b -d /tmp/t2.db /tmp/t | tee /tmp/t2.ls
+          grep -E '^ *[0-9]{6,} +share$' /tmp/t2.ls
+          for d in a b c d e f g h; do grep -qE "^ *[0-9]{5,} +$d\$" /tmp/t2.ls || { echo "missing $d"; exit 1; }; done
           out/duc ls -b -d /tmp/t2.db /tmp/t/a | tee /dev/stderr | grep -E '^ *[0-9]{1,4} +deep$'
 
       - name: Package
