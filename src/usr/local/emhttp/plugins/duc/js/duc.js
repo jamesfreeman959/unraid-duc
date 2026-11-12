@@ -12,9 +12,12 @@ var DucBrowser = (function () {
   var INNER = 72;           // radius of the centre disc
   var OUTER = 296;
   var LIST_LIMIT = 500;     // rows shown in the table
+  var COLUMN = { actual: 1, apparent: 2, count: 3 };   // fields of a history point after its time
+  var CHART = { w: 800, h: 200, left: 64, right: 12, top: 12, bottom: 26 };
 
   var opt, el = {};
-  var state = { roots: [], root: null, path: null, mode: 'actual', running: false, statusTimer: null };
+  var state = { roots: [], root: null, path: null, mode: 'actual', period: 30, running: false, statusTimer: null,
+                listTree: null, history: null };
   var seq = 0;              // discards responses from superseded navigations
 
   function $(id) { return document.getElementById(id); }
@@ -157,14 +160,18 @@ var DucBrowser = (function () {
 
     Promise.all([
       api({ action: 'ls', path: state.path, levels: RINGS, min: min, apparent: apparent }),
-      api({ action: 'ls', path: state.path, levels: 1, min: 0, apparent: apparent })
+      api({ action: 'ls', path: state.path, levels: 1, min: 0, apparent: apparent }),
+      api({ action: 'history', root: state.root, path: state.path }).catch(function () { return null; })
     ]).then(function (res) {
       if (my !== seq) return;
       el.chart.classList.remove('loading');
       sortTree(res[0]);
       sortTree(res[1]);
+      state.listTree = res[1];
+      state.history = res[2];
       drawChart(res[0]);
       drawList(res[1]);
+      drawHistory();
     }).catch(function (e) {
       if (my !== seq) return;
       el.chart.classList.remove('loading');
@@ -215,6 +222,9 @@ var DucBrowser = (function () {
     el.chart.textContent = '';
     el.list.textContent = '';
     el.more.textContent = '';
+    el.history.style.display = 'none';
+    el.periodLabel.style.display = 'none';
+    state.listTree = state.history = null;
   }
 
   /* ---------- sunburst ---------- */
@@ -309,6 +319,13 @@ var DucBrowser = (function () {
   function drawList(tree) {
     el.list.textContent = '';
     el.more.textContent = '';
+    var hist = state.history;
+    var ref = referencePoint();
+    var children = hist && hist.enabled && ref ? hist.children : null;
+    el.table.classList.toggle('no-delta', !children || !Object.keys(children).length);
+    el.deltaHead.textContent = ref ? opt.text.historySince + ' ' + shortDate(ref[0]) : opt.text.change;
+    el.deltaHead.title = ref ? opt.text.historySince + ' ' + longDate(ref[0], true) + '. ' + opt.text.changeTitle
+                             : opt.text.changeTitle;
     var total = value(tree);
     var kids = tree.children || [];
     if (!kids.length) {
@@ -347,6 +364,11 @@ var DucBrowser = (function () {
       size.textContent = fmt(v);
       tr.appendChild(size);
 
+      var delta = document.createElement('td');
+      delta.className = 'delta';
+      if (children && child.type === 'dir') showDelta(delta, children[child.name], v, ref[0]);
+      tr.appendChild(delta);
+
       var bar = document.createElement('td');
       bar.className = 'pct';
       var outer = document.createElement('div');
@@ -370,6 +392,144 @@ var DucBrowser = (function () {
     }
   }
 
+  /* ---------- history ---------- */
+
+  function pointValue(p) { return p[COLUMN[state.mode]]; }
+
+  /* Month names keep dates unambiguous in every locale (9 Nov, Nov 9, 9. Nov.). */
+  function shortDate(t) {
+    return new Date(t * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  }
+
+  function longDate(t, withTime) {
+    var o = { day: 'numeric', month: 'short', year: 'numeric' };
+    if (withTime) { o.hour = '2-digit'; o.minute = '2-digit'; }
+    return new Date(t * 1000).toLocaleString(undefined, o);
+  }
+
+  /* The snapshot of the current folder that changes are measured against: the newest one at
+     least `period` days older than the latest run, or the oldest one when the history is shorter.
+     The slack lets a run that started a little later than the day before still count as a day old. */
+  var PERIOD_SLACK = 3 * 3600;
+
+  function referencePoint() {
+    var pts = state.history && state.history.points;
+    if (!pts || pts.length < 2) return null;
+    if (!state.period) return pts[0];
+    var cutoff = pts[pts.length - 1][0] - state.period * 86400 + PERIOD_SLACK;
+    var ref = pts[0];
+    for (var i = 1; i < pts.length && pts[i][0] <= cutoff; i++) ref = pts[i];
+    return ref === pts[pts.length - 1] ? pts[pts.length - 2] : ref;
+  }
+
+  function showDelta(td, series, current, refTime) {
+    var base = null;
+    (series || []).forEach(function (p) { if (p[0] <= refTime) base = p; });
+    if (!base) {
+      // Top-level folders are always recorded, so a missing reference means the folder is new.
+      if (series && series.length && state.path === state.root) {
+        td.textContent = opt.text.historyNew;
+        td.className += ' new';
+      }
+      return;
+    }
+    var d = current - pointValue(base);
+    td.textContent = d === 0 ? '0' : (d > 0 ? '+' : '−') + fmt(Math.abs(d));
+    td.className += d > 0 ? ' up' : (d < 0 ? ' down' : ' same');
+    td.title = opt.text.historySince + ' ' + longDate(base[0], true) + ': ' + fmt(pointValue(base));
+  }
+
+  /* Sizes on the history chart share one unit and enough decimals to tell the grid lines apart,
+     so that small changes on a large share (29.21T vs 29.27T) stay visible. */
+  function chartFormat(lo, hi) {
+    if (state.mode === 'count') return function (v) { return Math.round(v).toLocaleString(); };
+    var units = ['B', 'K', 'M', 'G', 'T', 'P'], i = 0, f = 1;
+    while (hi / f >= 1024 && i < units.length - 1) { f *= 1024; i++; }
+    var step = (hi - lo) / 3 / f;
+    var digits = i === 0 ? 0 : Math.max(0, Math.min(3, Math.ceil(-Math.log10(step))));
+    return function (v, extra) { return (v / f).toFixed(Math.min(3, digits + (extra || 0))) + units[i]; };
+  }
+
+  function signed(d) { return d === 0 ? '±0' : (d > 0 ? '+' : '−') + fmt(Math.abs(d)); }
+
+  function svg(name, attrs, parentNode) {
+    var n = document.createElementNS(SVGNS, name);
+    Object.keys(attrs).forEach(function (k) { n.setAttribute(k, attrs[k]); });
+    (parentNode || el.hchart).appendChild(n);
+    return n;
+  }
+
+  function drawHistory() {
+    var hist = state.history;
+    el.hchart.textContent = '';
+    hideHistoryTip();
+    el.periodLabel.style.display = hist && hist.enabled ? '' : 'none';
+    if (!hist || !hist.enabled) { el.history.style.display = 'none'; return; }
+    el.history.style.display = '';
+
+    var all = hist.points || [];
+    var ref = referencePoint();
+    if (all.length < 2 || !ref) {
+      var depth = state.path === state.root ? 0 : state.path.slice(state.root.length).replace(/^\//, '').split('/').length;
+      el.hnote.textContent = all.length === 1 ? opt.text.historyOne
+        : (depth > hist.depth ? opt.text.historyDeeper : opt.text.historyNone);
+      el.hchart.style.display = 'none';
+      return;
+    }
+    el.hnote.textContent = opt.text.historySince + ' ' + longDate(ref[0]);
+    el.hchart.style.display = '';
+
+    var pts = all.filter(function (p) { return p[0] >= ref[0]; });
+    var t0 = pts[0][0], t1 = pts[pts.length - 1][0];
+    var vals = pts.map(pointValue);
+    var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+    var pad = (hi - lo) * 0.1 || Math.max(hi * 0.01, 1);
+    lo = Math.max(0, lo - pad); hi += pad;
+    var c = CHART, pw = c.w - c.left - c.right, ph = c.h - c.top - c.bottom;
+    function x(t) { return c.left + (t1 > t0 ? (t - t0) / (t1 - t0) * pw : pw / 2); }
+    function y(v) { return c.top + (1 - (v - lo) / (hi - lo)) * ph; }
+    var cf = chartFormat(lo, hi);
+
+    for (var g = 0; g <= 3; g++) {
+      var gv = lo + (hi - lo) * g / 3;
+      svg('line', { x1: c.left, x2: c.w - c.right, y1: y(gv), y2: y(gv), 'class': 'grid' });
+      svg('text', { x: c.left - 6, y: y(gv) + 4, 'text-anchor': 'end' }).textContent = cf(gv);
+    }
+    [t0, (t0 + t1) / 2, t1].forEach(function (t, i) {
+      svg('text', { x: x(t), y: c.h - 6, 'text-anchor': ['start', 'middle', 'end'][i] })
+        .textContent = new Date(t0 * 1000).getFullYear() === new Date(t1 * 1000).getFullYear() ? shortDate(t) : longDate(t);
+    });
+
+    var line = pts.map(function (p, i) { return (i ? 'L' : 'M') + x(p[0]).toFixed(1) + ' ' + y(pointValue(p)).toFixed(1); }).join(' ');
+    svg('path', { d: line + ' L' + x(t1).toFixed(1) + ' ' + (c.top + ph) + ' L' + x(t0).toFixed(1) + ' ' + (c.top + ph) + 'Z', 'class': 'area' });
+    svg('path', { d: line, 'class': 'line' });
+    if (pts.length <= 60) pts.forEach(function (p) { svg('circle', { cx: x(p[0]), cy: y(pointValue(p)), r: 2.5, 'class': 'dot' }); });
+
+    var marker = svg('circle', { r: 4.5, 'class': 'marker', style: 'display:none' });
+    var hit = svg('rect', { x: c.left, y: c.top, width: pw, height: ph, 'class': 'hit' });
+    hit.addEventListener('mousemove', function (e) {
+      var box = el.hchart.getBoundingClientRect();
+      var t = t0 + ((e.clientX - box.left) / box.width * c.w - c.left) / pw * (t1 - t0);
+      var bi = 0;
+      pts.forEach(function (p, i) { if (Math.abs(p[0] - t) < Math.abs(pts[bi][0] - t)) bi = i; });
+      var best = pts[bi];
+      marker.setAttribute('cx', x(best[0]));
+      marker.setAttribute('cy', y(pointValue(best)));
+      marker.style.display = '';
+      el.htip.textContent = longDate(best[0], true) + ': ' + cf(pointValue(best), 1) +
+        (bi > 0 ? ' (' + signed(pointValue(best) - pointValue(pts[bi - 1])) + ')' : '');
+      var wrap = el.hchart.parentNode.getBoundingClientRect();
+      el.htip.style.display = 'block';
+      var left = e.clientX - wrap.left + 14;
+      if (left + el.htip.offsetWidth > wrap.width) left = e.clientX - wrap.left - el.htip.offsetWidth - 14;
+      el.htip.style.left = Math.max(0, left) + 'px';
+      el.htip.style.top = (e.clientY - wrap.top + 14) + 'px';
+    });
+    hit.addEventListener('mouseleave', function () { marker.style.display = 'none'; hideHistoryTip(); });
+  }
+
+  function hideHistoryTip() { el.htip.style.display = 'none'; }
+
   /* ---------- init ---------- */
 
   function init(options) {
@@ -377,9 +537,21 @@ var DucBrowser = (function () {
     ['root', 'mode', 'state', 'run', 'cancel', 'message', 'crumbs', 'chart', 'tip', 'list', 'more']
       .forEach(function (k) { el[k] = $('duc-' + k); });
     el.body = document.querySelector('#duc-app .duc-body');
+    el.table = document.querySelector('#duc-app table.duc-list');
+    el.history = $('duc-history');
+    el.hchart = $('duc-history-chart');
+    el.hnote = $('duc-history-note');
+    el.htip = $('duc-history-tip');
+    el.period = $('duc-period');
+    el.periodLabel = $('duc-period-label');
+    el.deltaHead = $('duc-delta-head');
 
     state.mode = store('mode') || 'actual';
     el.mode.value = state.mode;
+    var period = store('period');
+    state.period = period !== null && period !== undefined && /^\d+$/.test(period) ? +period : 30;
+    el.period.value = String(state.period);
+    if (el.period.value !== String(state.period)) { state.period = 30; el.period.value = '30'; }
 
     el.root.addEventListener('change', function () {
       state.root = el.root.value;
@@ -390,6 +562,12 @@ var DucBrowser = (function () {
       state.mode = el.mode.value;
       store('mode', state.mode);
       load();
+    });
+    el.period.addEventListener('change', function () {
+      state.period = +el.period.value;
+      store('period', el.period.value);
+      if (state.listTree) drawList(state.listTree);
+      drawHistory();
     });
     el.run.addEventListener('click', function () {
       el.run.disabled = true;

@@ -22,6 +22,16 @@ Markdown="false"
         <option value="count">_(File count)_</option>
       </select>
     </label>
+    <label id="duc-period-label" style="display:none">_(Change over)_:
+      <select id="duc-period">
+        <option value="1">_(1 day)_</option>
+        <option value="7">_(7 days)_</option>
+        <option value="30">_(30 days)_</option>
+        <option value="90">_(90 days)_</option>
+        <option value="365">_(1 year)_</option>
+        <option value="0">_(All)_</option>
+      </select>
+    </label>
     <span class="duc-spacer"></span>
     <span id="duc-state"></span>
     <input type="button" id="duc-run" value="_(Index now)_">
@@ -39,10 +49,21 @@ Markdown="false"
     </div>
     <div class="duc-list-wrap">
       <table class="duc-list">
-        <thead><tr><th class="name">_(Name)_</th><th class="size">_(Size)_</th><th class="pct">%</th><th class="files">_(Files)_</th></tr></thead>
+        <thead><tr><th class="name">_(Name)_</th><th class="size">_(Size)_</th><th class="delta" id="duc-delta-head">_(Change)_</th><th class="pct">%</th><th class="files">_(Files)_</th></tr></thead>
         <tbody id="duc-list"></tbody>
       </table>
       <div id="duc-more" class="duc-more"></div>
+    </div>
+  </div>
+
+  <div id="duc-history" class="duc-history" style="display:none">
+    <div class="duc-history-head">
+      <strong>_(History)_</strong>
+      <span id="duc-history-note" class="duc-history-note"></span>
+    </div>
+    <div class="duc-history-wrap">
+      <svg id="duc-history-chart" class="duc-history-chart" viewBox="0 0 800 200" preserveAspectRatio="none" role="img" aria-label="_(Size history chart)_"></svg>
+      <div id="duc-history-tip" class="duc-tip"></div>
     </div>
   </div>
 </div>
@@ -62,7 +83,14 @@ $(function() {
       more: "_(more entries not shown)_",
       files: "_(files)_",
       up: "_(Up one level)_",
-      empty: "_(This folder is empty)_"
+      empty: "_(This folder is empty)_",
+      historySince: "_(Change since)_",
+      change: "_(Change)_",
+      changeTitle: "_(Change compared with the snapshot selected by Change over. Hover a value for the exact snapshot.)_",
+      historyOne: "_(Only one snapshot so far, the chart starts with the next index run.)_",
+      historyNone: "_(No history for this folder yet. Sizes are recorded after each index run.)_",
+      historyDeeper: "_(History is only kept for the first levels, see History depth in the settings.)_",
+      historyNew: "_(new)_"
     }
   });
 });

@@ -21,7 +21,10 @@ function ducSchedule(form) {
   $('#duc-hour').toggle(s === 'daily' || s === 'weekly' || s === 'monthly');
   $('#duc-custom').toggle(s === 'custom');
 }
-$(function() { ducSchedule(document.duc_settings); });
+function ducHistory(form) {
+  $('#duc-history-opts').toggle(form.HISTORY.value === 'yes');
+}
+$(function() { ducSchedule(document.duc_settings); ducHistory(document.duc_settings); });
 </script>
 
 <form markdown="1" name="duc_settings" method="POST" action="/update.php" target="progressFrame" onsubmit="ducPrepare(this)">
@@ -95,6 +98,35 @@ _(Count hard links once)_:
   </select>
 
 > Useful when you use hard links, for example with the *arr apps. This uses more memory while indexing.
+
+_(Keep size history)_:
+: <select name="HISTORY" onchange="ducHistory(this.form)">
+  <?=mk_option($cfg['HISTORY'], 'yes', _('Yes'))?>
+  <?=mk_option($cfg['HISTORY'], 'no', _('No'))?>
+  </select>
+
+> After each index run the folder sizes are added to a small history file next to the index
+> (`<?=htmlspecialchars(duc_history_file($cfg))?>`). The Disk Usage page then shows how a folder grew over time
+> and the change per subfolder. Nothing extra is scanned; the sizes come from the new index.
+
+<div markdown="1" id="duc-history-opts">
+_(History depth)_:
+: <select name="HISTORY_DEPTH">
+  <?=mk_option($cfg['HISTORY_DEPTH'], '1', _('Top level only'))?>
+  <?=mk_option($cfg['HISTORY_DEPTH'], '2', _('Two levels'))?>
+  <?=mk_option($cfg['HISTORY_DEPTH'], '3', _('Three levels'))?>
+  </select>
+
+> With `/mnt/user` indexed, the top level is the shares. Deeper folders are only recorded from 1 GB.
+
+_(Keep history for)_:
+: <select name="HISTORY_DAYS">
+  <?=mk_option($cfg['HISTORY_DAYS'], '365', _('1 year'))?>
+  <?=mk_option($cfg['HISTORY_DAYS'], '730', _('2 years'))?>
+  <?=mk_option($cfg['HISTORY_DAYS'], '1825', _('5 years'))?>
+  <?=mk_option($cfg['HISTORY_DAYS'], '0', _('Forever'))?>
+  </select>
+</div>
 
 _(Notifications)_:
 : <select name="NOTIFY">

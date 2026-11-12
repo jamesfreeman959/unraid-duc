@@ -45,8 +45,32 @@ table.duc-list .bar { display: inline-block; width: 90px; height: 8px; margin-ri
 table.duc-list .bar div { height: 100%; background: #ff8c2f; }
 .duc-more { padding: 8px; opacity: .7; }
 
+table.duc-list .delta { text-align: right; width: 110px; }
+table.duc-list .delta + .pct { padding-left: 16px; }
+table.duc-list.no-delta .delta { display: none; }
+table.duc-list td.delta.up { color: #e2793a; }
+table.duc-list td.delta.down { color: #4caf50; }
+table.duc-list td.delta.same, table.duc-list td.delta.new { opacity: .6; }
+
+.duc-history { margin-top: 20px; }
+.duc-history-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 6px; }
+.duc-history-head label { display: inline-flex; align-items: center; gap: 6px; margin: 0; }
+.duc-history-head select { min-width: 0; margin: 0; }
+.duc-history-note { opacity: .8; font-size: .95em; }
+.duc-history-wrap { position: relative; max-width: 900px; }
+#duc-history-tip { white-space: nowrap; word-break: normal; max-width: none; }
+.duc-history-chart { width: 100%; height: auto; display: block; }
+.duc-history-chart text { fill: currentColor; font-size: 12px; opacity: .8; pointer-events: none; }
+.duc-history-chart .grid { stroke: rgba(128,128,128,.25); stroke-width: 1; }
+.duc-history-chart .line { fill: none; stroke: #ff8c2f; stroke-width: 2; }
+.duc-history-chart .area { fill: rgba(255,140,47,.12); }
+.duc-history-chart .dot { fill: #ff8c2f; }
+.duc-history-chart .marker { fill: #ff8c2f; stroke: #fff; stroke-width: 1.5; pointer-events: none; }
+.duc-history-chart .hit { fill: transparent; }
+
 @media (max-width: 700px) {
   table.duc-list .files { display: none; }
+  table.duc-list .delta { width: 90px; }
   table.duc-list .pct { width: 110px; }
   table.duc-list .bar { width: 50px; }
 }
