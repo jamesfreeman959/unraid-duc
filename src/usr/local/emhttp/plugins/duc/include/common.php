@@ -74,7 +74,7 @@ const DUC_JSON_FLAGS = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_IN
 
 function duc_history_enabled(array $cfg): bool
 {
-    return ($cfg['HISTORY'] ?? 'yes') === 'yes';
+    return ($cfg['HISTORY'] ?? 'no') === 'yes';
 }
 
 /* The history lives next to the index: duc.db -> duc.history.jsonl */

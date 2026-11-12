@@ -62,7 +62,7 @@ Markdown="false"
       <span id="duc-history-note" class="duc-history-note"></span>
     </div>
     <div class="duc-history-wrap">
-      <svg id="duc-history-chart" class="duc-history-chart" viewBox="0 0 800 180" preserveAspectRatio="none" role="img" aria-label="_(Size history chart)_"></svg>
+      <svg id="duc-history-chart" class="duc-history-chart" viewBox="0 0 800 200" preserveAspectRatio="none" role="img" aria-label="_(Size history chart)_"></svg>
       <div id="duc-history-tip" class="duc-tip"></div>
     </div>
   </div>
